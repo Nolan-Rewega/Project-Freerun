@@ -7,7 +7,9 @@ public class movement : MonoBehaviour
     private bool IsJumping;
     private float time;
     private float startY;
+    private float distToGround;
 
+    private Rigidbody body;
 
     // Start is called before the first frame update
     void Start()
@@ -15,6 +17,13 @@ public class movement : MonoBehaviour
         this.IsJumping = false;
         this.time = 0.0f;
         this.startY = this.gameObject.transform.position.y;
+        this.distToGround = GetComponent<Collider>().bounds.extents.y;
+     
+        this.body = GetComponent<Rigidbody>();
+        if (this.body == null)
+        {
+            this.body = gameObject.AddComponent<Rigidbody>();   
+        }
     }
 
     // Update is called once per frame
@@ -22,6 +31,7 @@ public class movement : MonoBehaviour
     {
         Jump();
         Move();
+        Strafe();
     }
 
  
@@ -89,4 +99,22 @@ public class movement : MonoBehaviour
 
         return this.gameObject.transform.position.y;
     }
-}
+
+    private void Strafe()
+    {
+        if(!isGrounded())
+        {
+            float left = Input.GetKey(KeyCode.S) ? -1.25f : 1.0f;
+            float right = Input.GetKey(KeyCode.D) ? 1.25f : 1.0f;
+
+            Vector3 acceleration = new Vector3( (right - left) * (1/2), 0.0f, 0.0f);
+
+            this.body.velocity += acceleration * 1;
+            Debug.Log("here");
+        }
+    }
+    private bool isGrounded()
+    {
+        return Physics.Raycast(transform.position, -Vector3.up, this.distToGround + 0.1f);
+    }
+};
