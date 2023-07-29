@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
 
 public class movement : MonoBehaviour
 {
@@ -9,6 +11,12 @@ public class movement : MonoBehaviour
     [SerializeField] float moveSpeed = 10;
     [SerializeField] float sprintSpeed = 15;
     [SerializeField] float acceleration = 10;
+
+    [SerializeField] float staminaDrainSpeed = 1;
+    [SerializeField] float staminaRecoverySpeed = 1;
+    [SerializeField] float staminaDeadRecoverySpeed = .5f;
+    [SerializeField] Color32 staminaColor;
+    [SerializeField] Color32 staminaDepletedColor;
     [SerializeField] float groundDrag = 8;
     [SerializeField] float jumpForce = 10;
     [SerializeField] float jumpCooldown = 0.25f;
@@ -23,16 +31,35 @@ public class movement : MonoBehaviour
     [SerializeField] LayerMask whatIsGround;
     [SerializeField] Transform orientation;
     [SerializeField] Camera mainCamera;
+    [SerializeField] TMP_Text velocityText;
+    [SerializeField] RectTransform staminaBar;
+    [SerializeField] CanvasGroup staminaBarParent;
+    [SerializeField] AudioSource footSteps;
+
+    [Header("Footsteps")]
+    [SerializeField] float stepRate = 0.4f;
+    [SerializeField] float stepSprintRate = .28f;
+    [SerializeField] float stepCoolDown;
+    [SerializeField] AudioClip[] walkingFootSteps;
+    [SerializeField] AudioClip[] sprintingFootSteps;
+    [SerializeField] AudioClip landSound;
+    [SerializeField] AudioClip jumpSound;
 
     //Private variables
     private bool grounded;
     private bool readyToJump = true;
     private bool landed;
     private bool sprinting;
+    private bool staminaDepleted;
     private float horizontalInput;
     private float verticalInput;
     private float currentMoveSpeed;
     private float defaultFov;
+    private float currentStamina;
+    private float staminaInUseTimer;
+    private bool showStamina;
+    private bool staminaInUse;
+    private Color32 currentStaminaColor;
     private Rigidbody rb;
     private Vector3 moveDirection;
 
@@ -44,6 +71,8 @@ public class movement : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
         defaultFov = mainCamera.fieldOfView;
+        currentStaminaColor = staminaColor;
+        currentStamina = 1;
     }
 
 
@@ -54,11 +83,20 @@ public class movement : MonoBehaviour
         CheckForLanding();
         CheckForGrounded();
         
-        if (transform.position.y < killHeight) //TODO -- Respawn player
-        {
-            print("dead");
-        }
+        if (transform.position.y < killHeight) print("dead"); //TODO -- Respawn player
 
+        velocityText.text = rb.velocity.magnitude.ToString("00.0");
+        staminaBar.localScale = (new Vector3(currentStamina, 1, 1));
+
+        staminaBar.GetComponent<Image>().color = Color.Lerp(staminaBar.GetComponent<Image>().color, currentStaminaColor, Time.deltaTime * 5);
+        if (!staminaInUse) staminaInUseTimer -= Time.deltaTime * 3;
+        else {
+            staminaInUseTimer = 1;
+            staminaBarParent.alpha = Mathf.Lerp(staminaBarParent.alpha, 1, Time.deltaTime * 5);
+        } 
+        if (staminaInUseTimer < 0) staminaBarParent.alpha = Mathf.Lerp(staminaBarParent.alpha, 0, Time.deltaTime * 3);
+
+        FootSteps();
     }
     private void FixedUpdate()
     {
@@ -78,7 +116,9 @@ public class movement : MonoBehaviour
         if (grounded && !landed)
         {
             print("landed");
-            if(rb.velocity.y < -2) cameraAnimator.SetTrigger("Land");
+            footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+            footSteps.PlayOneShot(landSound);
+            if (rb.velocity.y < -2) cameraAnimator.SetTrigger("Land");
             landed = true;
         }
     }
@@ -88,16 +128,39 @@ public class movement : MonoBehaviour
         horizontalInput = Input.GetAxisRaw("Horizontal");
         verticalInput = Input.GetAxisRaw("Vertical");
 
-        if (Input.GetKey(sprintKey)) sprinting = true;
+        if (verticalInput > 0 && currentStamina > 0 && !staminaDepleted)
+        {
+            if (Input.GetKey(sprintKey)) sprinting = true;
+            else sprinting = false;
+        }
         else sprinting = false;
 
-        if (sprinting)
-        {
+        if (sprinting){
+            if (currentStamina > 0) currentStamina -= Time.deltaTime * staminaDrainSpeed;
+            staminaInUse = true;
             mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, sprintFov, 10 * Time.deltaTime);
             currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, sprintSpeed, acceleration * Time.deltaTime);
+            if (currentStamina <= 0) StaminaDepleted();
         }
-        else
+        else if(staminaDepleted){
+            if (currentStamina < 1) currentStamina += Time.deltaTime * staminaRecoverySpeed;
+            if (currentStamina < 0.75f) {
+                staminaInUse = true;
+            } 
+            else staminaInUse = false;
+            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
+            currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, moveSpeed, acceleration * Time.deltaTime);
+            if (currentStamina >= 1)
+            {
+                staminaDepleted = false;
+                currentStaminaColor = staminaColor;
+            }
+        }
+        else //Normal walking
         {
+            if (currentStamina < 1) currentStamina += Time.deltaTime * staminaDeadRecoverySpeed;
+            if (currentStamina < 0.75f) staminaInUse = true;
+            else staminaInUse = false;
             mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
             currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, moveSpeed, acceleration * Time.deltaTime);
         }
@@ -108,6 +171,13 @@ public class movement : MonoBehaviour
             Jump();
             Invoke(nameof(ResetJump), jumpCooldown);
         }
+    }
+
+    private void StaminaDepleted()
+    {
+        if (staminaDepleted == true) return;
+        currentStaminaColor = staminaDepletedColor;
+        staminaDepleted = true;
     }
 
     private void MovePlayer()
@@ -129,11 +199,38 @@ public class movement : MonoBehaviour
 
     private void Jump()
     {
+        footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+        footSteps.PlayOneShot(jumpSound);
         rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
         rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
     }
     private void ResetJump()
     {
         readyToJump = true;
+    }
+
+    void FootSteps()
+    {
+        stepCoolDown -= Time.deltaTime;
+        if (grounded)
+        {
+            if ((Input.GetAxis("Horizontal") != 0f || Input.GetAxis("Vertical") != 0f) && stepCoolDown < 0f)
+            {
+                if (sprinting)
+                {
+                    footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+                    int randomStep = Random.Range(0, sprintingFootSteps.Length);
+                    footSteps.PlayOneShot(sprintingFootSteps[randomStep]);
+                    stepCoolDown = stepSprintRate;
+                }
+                else //Normal walking
+                {
+                    footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+                    int randomStep = Random.Range(0, walkingFootSteps.Length);
+                    footSteps.PlayOneShot(walkingFootSteps[randomStep]);
+                    stepCoolDown = stepRate;
+                }
+            }
+        }
     }
 }
