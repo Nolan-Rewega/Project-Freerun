@@ -11,9 +11,13 @@ public class PlayerCamera : MonoBehaviour
 
     [Space(10)]
     //Camera tilting
-    public bool allowCameraTilt; //Kept public as it may be an option in a menu
-    [SerializeField] float tiltAmount; //Amount of tilt camera recieves when input is detected
+    public bool allowMovementTilt; //Kept public as it may be an option in a menu
+    [SerializeField] float movementTiltAmount; //Amount of tilt camera recieves when input is detected
     [SerializeField] float smoothTiltAmount; //How fast the camera tilts to it's desired rotation
+    [Space(10)]
+    public bool allowRotationTilt;
+    [SerializeField] float rotTiltAmount;
+    [SerializeField] float smoothRotAmount;
 
     [Header("Assignables")]
     //Assignables
@@ -38,7 +42,8 @@ public class PlayerCamera : MonoBehaviour
     private void Update()
     {
         CameraLook();
-        if(allowCameraTilt) HeadTilt();
+        if (allowMovementTilt) MovementTilt();
+        if (allowRotationTilt) RotationTilt();
     }
 
     private void CameraLook()
@@ -57,11 +62,19 @@ public class PlayerCamera : MonoBehaviour
         orientation.rotation = Quaternion.Euler(0, yRotation, 0); //Setting the transform Y rotation of the player's orientation (X & Z are locked to 0)
     }
 
-    private void HeadTilt()
+    private void MovementTilt()
     {
-        float rotZ = -Input.GetAxis("Horizontal") * tiltAmount; //This is getting the horizontal axis which is just A or D (will also work with controller)
+        float rotZ = -Input.GetAxis("Horizontal") * movementTiltAmount; //This is getting the horizontal axis which is just A or D (will also work with controller)
         Quaternion finalRot = Quaternion.Euler(0, 0, rotZ);
         cameraObject.transform.localRotation = Quaternion.Lerp(cameraObject.transform.localRotation, finalRot, smoothTiltAmount * Time.deltaTime); //Lerping the local rotation of the camera's Z axis for the tilting
         //I'm using lerping because when you press A or D the axis goes straight to -1 or 1, so we smooth the rotation so it's not so jarring
+    }
+
+
+    private void RotationTilt()
+    {
+        float rotZ = Input.GetAxisRaw("Mouse X") * rotTiltAmount;
+        Quaternion finalRot = Quaternion.Euler(0, 0, rotZ);
+        cameraObject.transform.localRotation = Quaternion.Lerp(cameraObject.transform.localRotation, finalRot, smoothRotAmount * Time.deltaTime);
     }
 }
