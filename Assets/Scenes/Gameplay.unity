@@ -312,18 +312,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 037f15f444129c1428501c8ea32d848b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 10
+  moveSpeed: 7
+  sprintSpeed: 10
+  acceleration: 7
   groundDrag: 8
   jumpForce: 10
   jumpCooldown: 0.25
   airMultiplier: 0.5
   playerHeight: 2
+  sprintFov: 100
   killHeight: -10
   jumpKey: 32
+  sprintKey: 304
   whatIsGround:
     serializedVersion: 2
     m_Bits: 8
   orientation: {fileID: 562692375}
+  mainCamera: {fileID: 963194227}
   cameraAnimator: {fileID: 746349894}
 --- !u!23 &67617672
 MeshRenderer:
@@ -406,9 +411,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mouseSensX: 100
   mouseSensY: 100
-  allowCameraTilt: 1
-  tiltAmount: 1.5
+  allowMovementTilt: 1
+  movementTiltAmount: 1.5
   smoothTiltAmount: 3
+  allowRotationTilt: 1
+  rotTiltAmount: 20
+  smoothRotAmount: 1.5
   orientation: {fileID: 562692375}
   cameraRot: {fileID: 1161956006}
   cameraObject: {fileID: 963194228}
