@@ -15,14 +15,13 @@ public class movement : MonoBehaviour
     [SerializeField] float staminaDrainSpeed = 1;
     [SerializeField] float staminaRecoverySpeed = 1;
     [SerializeField] float staminaDeadRecoverySpeed = .5f;
-    [SerializeField] Color32 staminaColor;
-    [SerializeField] Color32 staminaDepletedColor;
     [SerializeField] float groundDrag = 8;
     [SerializeField] float jumpForce = 10;
     [SerializeField] float jumpCooldown = 0.25f;
     [SerializeField] float airMultiplier = 0.5f;
     [SerializeField] float playerHeight = 2;
     [SerializeField] float sprintFov;
+    [SerializeField] float zoomFov;
 
     [SerializeField] float killHeight = -10f; //World kill height if player falls off map
     [Header("Assignables")]
@@ -34,22 +33,33 @@ public class movement : MonoBehaviour
     [SerializeField] TMP_Text velocityText;
     [SerializeField] RectTransform staminaBar;
     [SerializeField] CanvasGroup staminaBarParent;
-    [SerializeField] AudioSource footSteps;
+    [SerializeField] AudioSource cameraAudioSource;
+    [SerializeField] AudioSource footstepsAudioSource;
 
     [Header("Footsteps")]
     [SerializeField] float stepRate = 0.4f;
     [SerializeField] float stepSprintRate = .28f;
     [SerializeField] float stepCoolDown;
+
+    [Header("Sounds")]
     [SerializeField] AudioClip[] walkingFootSteps;
     [SerializeField] AudioClip[] sprintingFootSteps;
     [SerializeField] AudioClip landSound;
     [SerializeField] AudioClip jumpSound;
+    [SerializeField] AudioClip zoomIn;
+    [SerializeField] AudioClip zoomOut;
+
+    [Header("HUD")]
+    [SerializeField] Color32 staminaColor;
+    [SerializeField] Color32 staminaDepletedColor;
+    [SerializeField] Color32 velocityColor;
 
     //Private variables
     private bool grounded;
     private bool readyToJump = true;
     private bool landed;
     private bool sprinting;
+    private bool zooming;
     private bool staminaDepleted;
     private float horizontalInput;
     private float verticalInput;
@@ -57,7 +67,7 @@ public class movement : MonoBehaviour
     private float defaultFov;
     private float currentStamina;
     private float staminaInUseTimer;
-    private bool showStamina;
+    private bool showVelocity;
     private bool staminaInUse;
     private Color32 currentStaminaColor;
     private Rigidbody rb;
@@ -85,7 +95,17 @@ public class movement : MonoBehaviour
         
         if (transform.position.y < killHeight) print("dead"); //TODO -- Respawn player
 
-        velocityText.text = rb.velocity.magnitude.ToString("00.0");
+        velocityText.text = rb.velocity.magnitude.ToString("00");
+
+        if (zooming) {
+            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, zoomFov, 10 * Time.deltaTime);
+            showVelocity = false;
+        }
+        else showVelocity = true;
+
+        if (showVelocity) velocityText.color = Color.Lerp(velocityText.color, velocityColor, Time.deltaTime * 7);
+        else velocityText.color = Color.Lerp(velocityText.color, new Color32(255, 255, 255, 0), Time.deltaTime * 7);
+
         staminaBar.localScale = (new Vector3(currentStamina, 1, 1));
 
         staminaBar.GetComponent<Image>().color = Color.Lerp(staminaBar.GetComponent<Image>().color, currentStaminaColor, Time.deltaTime * 5);
@@ -116,8 +136,8 @@ public class movement : MonoBehaviour
         if (grounded && !landed)
         {
             print("landed");
-            footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
-            footSteps.PlayOneShot(landSound);
+            footstepsAudioSource.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+            footstepsAudioSource.PlayOneShot(landSound);
             if (rb.velocity.y < -2) cameraAnimator.SetTrigger("Land");
             landed = true;
         }
@@ -138,7 +158,7 @@ public class movement : MonoBehaviour
         if (sprinting){
             if (currentStamina > 0) currentStamina -= Time.deltaTime * staminaDrainSpeed;
             staminaInUse = true;
-            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, sprintFov, 10 * Time.deltaTime);
+            if (!zooming) mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, sprintFov, 10 * Time.deltaTime);
             currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, sprintSpeed, acceleration * Time.deltaTime);
             if (currentStamina <= 0) StaminaDepleted();
         }
@@ -148,7 +168,7 @@ public class movement : MonoBehaviour
                 staminaInUse = true;
             } 
             else staminaInUse = false;
-            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
+            if (!zooming) mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
             currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, moveSpeed, acceleration * Time.deltaTime);
             if (currentStamina >= 1)
             {
@@ -161,7 +181,7 @@ public class movement : MonoBehaviour
             if (currentStamina < 1) currentStamina += Time.deltaTime * staminaDeadRecoverySpeed;
             if (currentStamina < 0.75f) staminaInUse = true;
             else staminaInUse = false;
-            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
+            if(!zooming) mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, defaultFov, 10 * Time.deltaTime);
             currentMoveSpeed = Mathf.Lerp(currentMoveSpeed, moveSpeed, acceleration * Time.deltaTime);
         }
 
@@ -171,7 +191,20 @@ public class movement : MonoBehaviour
             Jump();
             Invoke(nameof(ResetJump), jumpCooldown);
         }
+
+        if (Input.GetMouseButtonDown(1))
+        {
+            cameraAudioSource.PlayOneShot(zoomIn);
+            zooming = true;
+        }
+        if (Input.GetMouseButtonUp(1))
+        {
+            cameraAudioSource.PlayOneShot(zoomOut);
+            zooming = false;
+        }
     }
+
+
 
     private void StaminaDepleted()
     {
@@ -199,8 +232,8 @@ public class movement : MonoBehaviour
 
     private void Jump()
     {
-        footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
-        footSteps.PlayOneShot(jumpSound);
+        footstepsAudioSource.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+        footstepsAudioSource.PlayOneShot(jumpSound);
         rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
         rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
     }
@@ -218,16 +251,16 @@ public class movement : MonoBehaviour
             {
                 if (sprinting)
                 {
-                    footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+                    footstepsAudioSource.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
                     int randomStep = Random.Range(0, sprintingFootSteps.Length);
-                    footSteps.PlayOneShot(sprintingFootSteps[randomStep]);
+                    footstepsAudioSource.PlayOneShot(sprintingFootSteps[randomStep]);
                     stepCoolDown = stepSprintRate;
                 }
                 else //Normal walking
                 {
-                    footSteps.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
+                    footstepsAudioSource.pitch = 1f - 0.1f + Random.Range(-.1f, .1f);
                     int randomStep = Random.Range(0, walkingFootSteps.Length);
-                    footSteps.PlayOneShot(walkingFootSteps[randomStep]);
+                    footstepsAudioSource.PlayOneShot(walkingFootSteps[randomStep]);
                     stepCoolDown = stepRate;
                 }
             }
