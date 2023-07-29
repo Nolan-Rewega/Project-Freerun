@@ -4,89 +4,111 @@ using UnityEngine;
 
 public class movement : MonoBehaviour
 {
-    private bool IsJumping;
-    private float time;
-    private float startY;
+    //Settings
+    [Header("Movement Settings")]
+    [SerializeField] float moveSpeed = 10;
+    [SerializeField] float groundDrag = 8;
+    [SerializeField] float jumpForce = 10;
+    [SerializeField] float jumpCooldown = 0.25f;
+    [SerializeField] float airMultiplier = 0.5f;
+    [SerializeField] float playerHeight = 2;
+    [SerializeField] float killHeight = -10f; //World kill height if player falls off map
+    [Header("Assignables")]
+    [SerializeField] KeyCode jumpKey = KeyCode.Space;
+    [SerializeField] LayerMask whatIsGround;
+    [SerializeField] Transform orientation;
+
+    //Private variables
+    private bool grounded;
+    private bool readyToJump = true;
+    private bool landed;
+    private float horizontalInput;
+    private float verticalInput;
+    private Rigidbody rb;
+    private Vector3 moveDirection;
+
+    [SerializeField] Animator cameraAnimator; //Camera animator for landing effect
 
 
-    // Start is called before the first frame update
-    void Start()
+    private void Start()
     {
-        this.IsJumping = false;
-        this.time = 0.0f;
-        this.startY = this.gameObject.transform.position.y;
+        rb = GetComponent<Rigidbody>();
+        rb.freezeRotation = true;
     }
 
-    // Update is called once per frame
-    void Update()
+
+    private void Update()
     {
-        Jump();
-        Move();
+        MyInput();
+        SpeedControl();
+        CheckForLanding();
+        CheckForGrounded();
+        
+        if (transform.position.y < killHeight) //TODO -- Respawn player
+        {
+            print("dead");
+        }
+
+    }
+    private void FixedUpdate()
+    {
+        MovePlayer(); //In physics always use fixed update
     }
 
- 
-    private void Move()
+    private void CheckForGrounded()
     {
-        // Move this GameObject relative to its forward vector.
-        float angle = this.gameObject.transform.eulerAngles.y * Mathf.Deg2Rad;
-        float sprint = Input.GetKey(KeyCode.LeftShift) ? 1.5f : 1.0f;
-        float speed = 5.0f;
+        grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.2f, whatIsGround);
+        if (grounded) rb.drag = groundDrag;
+        else rb.drag = 0;
+    }
 
-        float up = Input.GetKey(KeyCode.W) ? 1.0f : 0.0f;
-        float left = Input.GetKey(KeyCode.A) ? 1.0f : 0.0f;
-        float down = Input.GetKey(KeyCode.S) ? 1.0f : 0.0f;
-        float right = Input.GetKey(KeyCode.D) ? 1.0f : 0.0f;
+    private void CheckForLanding()
+    {
+        if (!grounded && landed) landed = false;
+        if (grounded && !landed)
+        {
+            print("landed");
+            if(rb.velocity.y < -2) cameraAnimator.SetTrigger("Land");
+            landed = true;
+        }
+    }
 
-        Vector3 direction = sprint * speed * Time.deltaTime * (new Vector3(right - left, 0.0f, up - down)).normalized;
+    private void MyInput()
+    {
+        horizontalInput = Input.GetAxisRaw("Horizontal");
+        verticalInput = Input.GetAxisRaw("Vertical");
+        if (Input.GetKey(jumpKey) && readyToJump && grounded)
+        {
+            readyToJump = false;
+            Jump();
+            Invoke(nameof(ResetJump), jumpCooldown);
+        }
+    }
 
-        // This is scuffed, will change later
-        this.gameObject.transform.position += new Vector3(Mathf.Cos(-angle) * direction.x - Mathf.Sin(-angle) * direction.z,
-                                                          0.0f,
-                                                          Mathf.Sin(-angle) * direction.x + Mathf.Cos(-angle) * direction.z);
+    private void MovePlayer()
+    {
+        moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
+        if (grounded) rb.AddForce(10 * moveSpeed * moveDirection.normalized, ForceMode.Force);
+        else rb.AddForce(10 * airMultiplier * moveSpeed * moveDirection.normalized, ForceMode.Force);
+    }
+
+    private void SpeedControl()
+    {
+        Vector3 flatVel = new(rb.velocity.x, 0f, rb.velocity.z);
+        if (flatVel.magnitude > moveSpeed)
+        {
+            Vector3 limitedVel = flatVel.normalized * moveSpeed;
+            rb.velocity = new Vector3(limitedVel.x, rb.velocity.y, limitedVel.z);
+        }
     }
 
     private void Jump()
     {
-        this.gameObject.transform.position = new Vector3(this.gameObject.transform.position.x,
-                                                 this.JumpInterpolation(),
-                                                 this.gameObject.transform.position.z);
+        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+        rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
     }
-
-    // This is Omega Cursed and will be replaced...
-    private float JumpInterpolation()
+    private void ResetJump()
     {
-        if (Input.GetKeyDown(KeyCode.Space) && !this.IsJumping)
-        {
-            this.time = 0;
-            this.startY = this.gameObject.transform.position.y;
-            this.IsJumping = true;
-        }
-        
-        if (this.IsJumping)
-        {
-            // This is definitely not how its done...
-            this.time += Time.deltaTime;
-
-            float a = this.startY;
-            float b = 9.0f;
-            float c = -45.0f;
-            float d = 86.0f;
-            float e = -65.0f;
-
-            float xInterscept = 0.582f;
-
-            if (this.time > xInterscept)
-            {
-                this.time = 0.0f;
-                this.IsJumping = false;
-                return this.gameObject.transform.position.y;
-            }
-
-            float x = this.time * xInterscept;
-
-            return a + (b * x + c * Mathf.Pow(x, 2) + d * Mathf.Pow(x, 3) + e * Mathf.Pow(x, 4)) * 2;
-        }
-
-        return this.gameObject.transform.position.y;
+        readyToJump = true;
     }
 }

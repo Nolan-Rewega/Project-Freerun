@@ -4,70 +4,64 @@ using UnityEngine;
 
 public class PlayerCamera : MonoBehaviour
 {
-    private Transform childCameraTransform;
-    private bool IsCrouching;
-    private Vector3 CrouchHeight;
+    //Controls
+    [Header("Settings")]
+    [SerializeField] float mouseSensX = 800; //Mouse sensitivity on the X axis (both should be the same)
+    [SerializeField] float mouseSensY = 800; //Mouse sensitivity on the Y axis
 
-    // Start is called before the first frame update
-    void Start()
+    [Space(10)]
+    //Camera tilting
+    public bool allowCameraTilt; //Kept public as it may be an option in a menu
+    [SerializeField] float tiltAmount; //Amount of tilt camera recieves when input is detected
+    [SerializeField] float smoothTiltAmount; //How fast the camera tilts to it's desired rotation
+
+    [Header("Assignables")]
+    //Assignables
+    [SerializeField] Transform orientation; //Orientation of the player (this will actually rotate on the Y axis depending on where the player is looking)
+    [SerializeField] Transform cameraRot; //Camera parent that is being rotated by mouse movement
+    [SerializeField] Transform cameraObject; //Used for camera tilting
+
+    //Private variables
+    private float xRotation;
+    private float yRotation;
+
+    private void Start()
     {
-        this.childCameraTransform = gameObject.transform.Find("PlayerCamera");
+        Cursor.lockState = CursorLockMode.Locked; //Keep cursor locked in center
+        Cursor.visible = false; //Hide cursor
 
-        if (this.childCameraTransform == null)
-        {
-            // Trying out Debug Logging
-            Debug.LogError($"ERROR: Could not find Child 'PlayerCamera' on Object '{this.gameObject.name}'");
-            Application.Quit();
-            UnityEditor.EditorApplication.isPlaying = false;
-        }
-
-        IsCrouching = false;
-        CrouchHeight = new Vector3(0, 0.5f, 0);
+        //Set rotation to 0 at start
+        xRotation = 0;
+        yRotation = 0;
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
-
-        // Moving the mouse will move the camera. 
-        HandleMouse();
-
-        // Crouching will cause the player camera to change. 
-        HandleCrouch();
-
+        CameraLook();
+        if(allowCameraTilt) HeadTilt();
     }
 
-    private void HandleMouse()
+    private void CameraLook()
     {
+        //TODO -- if paused set mouseX & mouseY to 0
 
-        float deltaX = Input.GetAxis("Mouse X");
-        float deltaY = Input.GetAxis("Mouse Y");
+        //Recieving input from mouse
+        float mouseX = Input.GetAxisRaw("Mouse X") * Time.fixedDeltaTime * mouseSensX;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * Time.fixedDeltaTime * mouseSensY;
 
-        // This is also Scuffed, will change later...
-        this.childCameraTransform.eulerAngles += new Vector3(-deltaY, 0.0f, 0.0f);
-        this.gameObject.transform.eulerAngles += new Vector3(0.0f, deltaX, 0.0f);
+        yRotation += mouseX;
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -90, 90f); //Clamp X rotation so player can not look too far down or up
+
+        cameraRot.rotation = Quaternion.Euler(xRotation, yRotation, 0); //Actually setting the transform for the camera's rotation
+        orientation.rotation = Quaternion.Euler(0, yRotation, 0); //Setting the transform Y rotation of the player's orientation (X & Z are locked to 0)
     }
 
-    private void HandleCrouch()
+    private void HeadTilt()
     {
-
-        if (!IsCrouching && Input.GetKey(KeyCode.LeftControl))
-        {
-            //!TODO: Need code to update the player model to a crouched state
-            this.childCameraTransform.position -= CrouchHeight;
-            IsCrouching = true;
-            return; 
-        }
-
-        // Check if crouch has been released this frame 
-        if(IsCrouching && !Input.GetKey(KeyCode.LeftControl))
-        {
-            this.childCameraTransform.position += CrouchHeight;
-            IsCrouching = false;
-            return; 
-        }
-
+        float rotZ = -Input.GetAxis("Horizontal") * tiltAmount; //This is getting the horizontal axis which is just A or D (will also work with controller)
+        Quaternion finalRot = Quaternion.Euler(0, 0, rotZ);
+        cameraObject.transform.localRotation = Quaternion.Lerp(cameraObject.transform.localRotation, finalRot, smoothTiltAmount * Time.deltaTime); //Lerping the local rotation of the camera's Z axis for the tilting
+        //I'm using lerping because when you press A or D the axis goes straight to -1 or 1, so we smooth the rotation so it's not so jarring
     }
-
-
 }
