@@ -14,6 +14,9 @@ public class TimeTrialManager : MonoBehaviour
     private float newTime;
     private float bestTime;
 
+    [SerializeField] Transform player;
+    [SerializeField] Vector3 resetPos;
+
     [SerializeField] Transform checkpointsParent;
     [SerializeField] List<GameObject> checkpoints;
     [SerializeField] List<GameObject> activatedCheckpoints;
@@ -31,6 +34,8 @@ public class TimeTrialManager : MonoBehaviour
 
     private void Start()
     {
+        resetPos = player.position;
+
         for (int i = 0; i < checkpointsParent.childCount; i++)
         {
             Transform childTransform = checkpointsParent.GetChild(i);
@@ -55,7 +60,11 @@ public class TimeTrialManager : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R)) ResetTrial(); 
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            ResetTrial();
+            ResetPlayerPos();
+        }
 
 
         if (trialStarted) timer += Time.deltaTime;
@@ -108,5 +117,9 @@ public class TimeTrialManager : MonoBehaviour
         timer = 0;
         checkpointsCompleted = false;
         activatedCheckpoints.Clear();
+    }
+    public void ResetPlayerPos()
+    {
+        player.position = resetPos; 
     }
 }
